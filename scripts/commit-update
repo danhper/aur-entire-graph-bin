@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${RELEASE_VERSION:?RELEASE_VERSION is required}"
+: "${GITHUB_ACTOR:?GITHUB_ACTOR is required}"
+: "${GITHUB_ACTOR_ID:?GITHUB_ACTOR_ID is required}"
+
+if [[ -z "$(git status --porcelain -- PKGBUILD)" ]]; then
+  echo "PKGBUILD is already at $RELEASE_VERSION"
+  exit 0
+fi
+
+git config user.name "$GITHUB_ACTOR"
+git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
+git add PKGBUILD
+git commit -m "Update entire-graph-bin to $RELEASE_VERSION"
+git push

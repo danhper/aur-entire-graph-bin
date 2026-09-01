@@ -1,0 +1,42 @@
+name: Update PKGBUILD
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-pkgbuild
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Update PKGBUILD
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/update-pkgbuild
+
+      - name: Generate .SRCINFO
+        run: scripts/generate-srcinfo
+
+      - name: Validate package build
+        run: scripts/validate-package
+
+      - name: Commit update
+        env:
+          RELEASE_VERSION: ${{ steps.update.outputs.version }}
+        run: scripts/commit-update
+
+      - name: Publish to AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: scripts/publish-aur

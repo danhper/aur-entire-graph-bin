@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly image='archlinux:base-devel'
+
+docker run --rm \
+  --volume "$PWD:/workspace:ro" \
+  "$image" \
+  bash -c '
+    useradd --create-home builder
+    install -d -o builder -g builder /build
+    install -o builder -g builder -m 644 /workspace/PKGBUILD /build/PKGBUILD
+    cd /build
+    runuser --user builder -- makepkg --noconfirm --cleanbuild --nodeps
+  '

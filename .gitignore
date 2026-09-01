@@ -1,0 +1,8 @@
+# makepkg build directories and packages
+/pkg/
+/src/
+/*.pkg.tar.*
+/*.src.tar.*
+/entire-graph-*.tar.gz
+/.SRCINFO
+/repository/

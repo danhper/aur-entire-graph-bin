@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly upstream_repo='entireio/entire-graph'
+readonly pkgbuild='PKGBUILD'
+
+release_tag="$({ gh api --paginate "repos/$upstream_repo/releases"; } | jq -sr '
+  add
+  | map(select(.draft == false))
+  | map(select(.tag_name | test("nightly"; "i") | not))
+  | first
+  | .tag_name
+')"
+
+if [[ -z "$release_tag" || "$release_tag" == 'null' || "${release_tag,,}" == *nightly* ]]; then
+  echo 'No non-nightly release found' >&2
+  exit 1
+fi
+
+readonly version="${release_tag#v}"
+current_version="$(sed -n 's/^pkgver=//p' "$pkgbuild")"
+checksums_file="$(mktemp)"
+trap 'rm -f "$checksums_file"' EXIT
+rm -f "$checksums_file"
+
+gh release download "$release_tag" \
+  --repo "$upstream_repo" \
+  --pattern checksums.txt \
+  --output "$checksums_file"
+
+amd64_sum="$(awk -v version="$version" '$2 == "entire-graph_" version "_linux_amd64.tar.gz" { print $1 }' "$checksums_file")"
+arm64_sum="$(awk -v version="$version" '$2 == "entire-graph_" version "_linux_arm64.tar.gz" { print $1 }' "$checksums_file")"
+
+if [[ ! "$amd64_sum" =~ ^[0-9a-f]{64}$ || ! "$arm64_sum" =~ ^[0-9a-f]{64}$ ]]; then
+  echo 'Release checksums are missing or malformed' >&2
+  exit 1
+fi
+
+sed_args=(
+  -e "s/^pkgver=.*/pkgver=$version/"
+  -e "s/^sha256sums_x86_64=.*/sha256sums_x86_64=('$amd64_sum')/"
+  -e "s/^sha256sums_aarch64=.*/sha256sums_aarch64=('$arm64_sum')/"
+)
+
+if [[ "$version" != "$current_version" ]]; then
+  sed_args+=(-e 's/^pkgrel=.*/pkgrel=1/')
+fi
+
+sed -i "${sed_args[@]}" "$pkgbuild"
+
+bash -n "$pkgbuild"
+printf 'Updated %s to %s\n' "$pkgbuild" "$version"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+fi
